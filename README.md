@@ -34,7 +34,7 @@
 ┃   ┌─────────────────────────────────────────────────────────┐   ┃
 ┃   │  Acceptor (监听端口 5005、接收新连接、轮询分发给子线程)  │   ┃
 ┃   └──────────────────────────┬──────────────────────────────┘   ┃
-┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━��
+┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━��━━━━━━━━━━━━━┛
                                   │
                  ┌────────────────┼────────────────┐
                  │                │                │
@@ -132,16 +132,22 @@ Client TCP Connection
 - make
 
 ### 编译
+
 ```bash
-git clone https://github.com/你的用户名/imitate-muduo.git
-cd imitate-muduo
+git clone https://github.com/whytreatme/imitate-muduo-clean.git
+cd imitate-muduo-clean
 make
 ```
 
+编译完成后会生成两个可执行文件：
+- `server` - 回显服务器
+- `client` - 测试客户端
+
 ### 启动服务端
+
 ```bash
 ./server 0.0.0.0 5005 60 180
-#         IP    端口  定时器周期(秒) 空闲超时(秒)
+#          IP    端口  定时器周期(秒) 空闲超时(秒)
 ```
 
 **参数说明：**
@@ -150,3 +156,166 @@ make
 - `60` - 定时器检测周期，单位秒（定期检查超时连接）
 - `180` - 连接空闲超时时间，单位秒（超过此时间无数据交互则关闭连接）
 
+**预期输出：**
+```
+[main] server starting...
+[EchoServer] server started on 0.0.0.0:5005, 3 worker threads
+```
+
+### 启动客户端测试（在另一个终端）
+
+```bash
+./client 127.0.0.1 5005
+#          IP        端口
+```
+
+**参数说明：**
+- `127.0.0.1` - 服务端地址（本机测试使用 127.0.0.1）
+- `5005` - 服务端端口号
+
+**预期输出：**
+```
+connect ok.
+现在开始接受回复内容
+recv:这是第0个矛盾存在
+recv:这是第1个矛盾存在
+recv:这是第2个矛盾存在
+recv:这是第3个矛盾存在
+recv:这是第4个矛盾存在
+```
+
+### 完整测试流程
+
+**终端1 - 启动服务端：**
+```bash
+$ make                    # 编译
+$ ./server 0.0.0.0 5005 60 180
+[main] server starting...
+[EchoServer] server started on 0.0.0.0:5005, 3 worker threads
+```
+
+**终端2 - 启动客户端：**
+```bash
+$ ./client 127.0.0.1 5005
+connect ok.
+现��开始接受回复内容
+recv:这是第0个矛盾存在
+recv:这是第1个矛盾存在
+recv:这是第2个矛盾存在
+recv:这是第3个矛盾存在
+recv:这是第4个矛盾存在
+```
+
+**终端1 - 停止服务端（按 Ctrl+C）：**
+```
+[main] signal 2 received, stopping server...
+[main] stop request finished.
+[main] server main loop exited.
+[main] stop thread joined, deleting server.
+```
+
+### 清理编译文件
+
+```bash
+make clean
+```
+
+---
+
+## 🧪 性能测试
+
+该项目支持多客户端并发连接测试：
+
+```bash
+# 终端1：启动服务端
+./server 0.0.0.0 5005 60 180
+
+# 终端2-N：启动多个客户端
+./client 127.0.0.1 5005 &
+./client 127.0.0.1 5005 &
+./client 127.0.0.1 5005 &
+```
+
+---
+
+## 📝 协议说明
+
+该项目实现了简单的 **4字节长度头 + 消息体** 的自定义协议：
+
+```
+┌──────────────────────────────────────┐
+│  4字节长度 (网络字节序)              │
+├──────────────────────────────────────┤
+│  消息体 (UTF-8 编码)                 │
+└─────────────────────────────���────────┘
+```
+
+- **长度头** - 4 字节，网络字节序（Big Endian）
+- **消息体** - 长度字段指定的字节数
+
+---
+
+## 📚 项目结构
+
+```
+imitate-muduo-clean/
+├── README.md               # 项目说明文档
+├── Makefile                # 编译脚本
+├── src/                    # 源代码目录
+│   ├── main.cpp            # 服务器主程序
+│   ├── EchoServer.cpp      # 回显服务器实现
+│   ├── EchoServer.h
+│   ├── TcpServer.cpp       # TCP服务器框架
+│   ├── TcpServer.h
+│   ├── EventLoop.cpp       # 事件循环核心
+│   ├── EventLoop.h
+│   ├── Channel.cpp         # 通道管理
+│   ├── Channel.h
+│   ├── Epoll.cpp           # Epoll多路复用
+│   ├── Epoll.h
+│   ├── Acceptor.cpp        # 连接接收器
+│   ├── Acceptor.h
+│   ├── Connection.cpp      # TCP连接管理
+│   ├── Connection.h
+│   ├── Buffer.cpp          # 读写缓冲区
+│   ├── Buffer.h
+│   ├── Socket.cpp          # 套接字封装
+│   ├── Socket.h
+│   ├── InetAddress.cpp     # 网络地址
+│   ├── InetAddress.h
+│   ├── TimerFdChannel.cpp  # 定时器
+│   ├── TimerFdChannel.h
+│   ├── ThreadPool.cpp      # 线程池
+│   ├── ThreadPool.h
+│   └── Logger.h            # 日志工具
+└── client/                 # 客户端目录
+    └── client.cpp          # 测试客户端
+```
+
+---
+
+## 💡 核心特性
+
+✅ **高性能**：Epoll 边缘触发 + 非阻塞 I/O  
+✅ **多线程**：主从 Reactor 模型，充分利用多核 CPU  
+✅ **安全**：智能指针管理内存，避免内存泄漏  
+✅ **可扩展**：易于扩展业务逻辑（如自定义协议、连接回调）  
+✅ **简洁**：代码结构清晰，注释完善，适合学习  
+
+---
+
+## 📖 学习资源
+
+- 《Linux 多线程服务端编程：使用 muduo C++网络库》- 陈硕
+- Linux epoll 官方文档：`man epoll`
+- 高性能网络编程：Reactor 模式、Non-blocking I/O、内存管理等
+
+---
+
+## 🤝 交流
+
+欢迎提交 Issue 和 Pull Request！
+
+---
+
+**祝您使用愉快！** 🎉
